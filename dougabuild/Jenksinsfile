@@ -1,0 +1,116 @@
+#!groovy
+
+//These will not be needed if we're running this as a pipeline SCM job, as these are automatically added to the 'scm' variable, but if we instead just cut & paste this file into a pipeline job, they will be used as fallback
+def PROJECT_URL = "https://github.com/dseeley/ecs"
+
+//This allows us to create our own Docker image for this specific use-case.  Once it is built, it will not be rebuilt, so only adds delay the first time we use it.
+def create_custom_image(image_name, params = "") {
+    // Create a lock to prevent building the same image in parallel
+    lock("IMAGEBUILDLOCK__" + env.NODE_NAME) {
+        def jenkins_username = sh(script: 'whoami', returnStdout: true).trim()
+        def jenkins_uid = sh(script: "id -u  ${jenkins_username}", returnStdout: true).trim()
+        def jenkins_gid = sh(script: "id -g  ${jenkins_username}", returnStdout: true).trim()
+        def gopath = "${env.JENKINS_HOME}/go"
+
+        def dockerfile = """
+            FROM ubuntu:20.04
+            ARG DEBIAN_FRONTEND=noninteractive
+            ENV JENKINS_HOME=${env.JENKINS_HOME}
+            ENV HOME=${env.JENKINS_HOME}
+            ENV TZ=Europe/London
+            ENV GOPATH=${gopath}
+            ENV PATH=${gopath}/bin:$PATH
+            RUN groupadd -g ${jenkins_gid} ${jenkins_username} && useradd -m -u ${jenkins_uid} -g ${jenkins_gid} -s /bin/bash ${jenkins_username}
+            RUN apt-get update  && apt-get install -y git iproute2  \
+                      python3-boto python3-boto3 python3-botocore python3-dev python3-distutils python3-dnspython python3-google-auth python3-googleapi python3-libcloud python3-jinja2 python3-jmespath python3-netaddr python3-paramiko python3-pip python3-ruamel.yaml python3-setuptools python3-wheel python3-xmltodict \
+                && pip3 install ansible ansible-base \
+                && pip3 install -r \$(pip3 show ansible | grep ^Location | sed 's/Location: \\(.*\\)/\\1/')/ansible_collections/azure/azcollection/requirements-azure.txt
+            RUN apt-get install -y asciidoctor
+            RUN apt-get install -y golang-go build-essential python3-git python3-venv
+            """.stripIndent()
+
+        writeFile(file: "Dockerfile", text: dockerfile, encoding: "UTF-8")
+        custom_build = docker.build(image_name, params + "--network host .")
+
+        return (custom_build)
+    }
+}
+
+properties([
+        parameters([
+                credentials(name: 'GIT_CREDS', credentialType: 'com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl', defaultValue: 'GITHUB_SVC_USER', description: 'Jenkins username/password credentials for GitHub', required: false),
+                string(name: 'APP_NAME', description: "An optional custom app_name to override the default in the playbook"),
+                choice(name: 'CLOUD_REGION', choices: ['esxifree/dougalab', 'aws/eu-west-1', 'azure/westeurope', 'gcp/europe-west1'], description: "Choose a cloud/region"),
+                choice(name: 'BUILDENV', choices: ['tools', 'sandbox', 'dev', 'stage', 'prod'], description: "Choose an environment to deploy"),
+                string(name: 'CLUSTER_ID', defaultValue: '', description: "Select a cluster_id to deploy", trim: true),
+        ])
+])
+
+node {
+    sh 'printenv | sort'
+    echo "Params: $params"
+
+    def docker_parent_net_str = ""
+    if (sh(script: 'grep -sq "docker\\|lxc" /proc/1/cgroup', returnStatus: true) == 0) {
+        println("Running in docker.  Getting network to pass to docker-in-docker containers...")
+        def docker_parent_net_id = sh(script: 'docker inspect  $(basename $(cat /proc/1/cpuset)) -f "{{ range .NetworkSettings.Networks }}{{println .NetworkID}}{{end}}" | head -n 1', returnStdout: true).trim()
+        docker_parent_net_str = "--network ${docker_parent_net_id}"
+        println("docker_parent_net_str: ${docker_parent_net_str}")
+    }
+
+    create_custom_image("scs", "").inside("${docker_parent_net_str}") {
+        stage('Check Environment') {
+            sh 'printenv | sort'
+            println("common_deploy_vars params:" + params)
+        }
+
+        println("currentBuild.getBuildCauses: " + currentBuild.getBuildCauses())
+        if (currentBuild.getBuildCauses('hudson.model.Cause$SCMTriggerCause').size() > 0 || currentBuild.getBuildCauses('hudson.model.Cause$UpstreamCause').size() > 0) {
+            println("Checking out default scm: " + scm.userRemoteConfigs + " -- " + scm.branches)
+            checkout(scm)
+        } else {
+            def GIT_BRANCH = "master"
+            if (env.CHANGE_BRANCH) {
+                GIT_BRANCH = 'refs/heads/' + env.CHANGE_BRANCH
+            } else if (env.BRANCH_NAME) {
+                GIT_BRANCH = 'refs/heads/' + env.BRANCH_NAME
+            } else if (env.TAG_NAME) {
+                GIT_BRANCH = 'refs/tags/' + env.TAG_NAME
+            }
+            println("No 'scm' params for clusterverse testsuite repo; using params.")
+            checkout([$class: 'GitSCM', branches: [[name: "${GIT_BRANCH}"]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'WipeWorkspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: params.GIT_CREDS ? params.GIT_CREDS : '', url: PROJECT_URL]]])
+        }
+
+        stage('Build base ECS (python only)') {
+            echo 'Build the yaml/json'
+            sh 'python3 scripts/generator.py'
+            dir('docs') {
+                echo 'Build the asciidoc'
+                sh 'asciidoctor dcs.asciidoc -o index.html'
+            }
+        }
+
+        stage('Build Experimental (golang needed)') {
+            echo 'Create virtual env'
+            sh 'make ve'
+            echo 'Build the yaml'
+            sh 'make'
+        }
+
+        if (params.CLOUD_REGION && params.BUILDENV && params.CLUSTER_ID) {
+            sh 'mkdir -p dougabuild/roles/docserver/files'
+            sh 'cp -R docs/*.html generated dougabuild/roles/docserver/files'
+
+            def (CLOUD_TYPE, REGION) = params.CLOUD_REGION.split('/')
+
+            String APP_NAME = ""
+            if (params.APP_NAME != "" && params.APP_NAME != null) {
+                APP_NAME = " -e app_name=" + params.APP_NAME
+            }
+
+            stage('Build docserver') {
+                sh "ansible-playbook -e cloud_type=${CLOUD_TYPE} -e region=${REGION} -e buildenv=${params.BUILDENV} -e clusterid=${params.CLUSTER_ID} cluster.yml $APP_NAME -vvv"
+            }
+        }
+    }
+}

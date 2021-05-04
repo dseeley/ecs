@@ -1,0 +1,30 @@
+---
+
+- name: Install nginx
+  become: yes
+  apt:
+    name: nginx
+    update_cache: yes
+    state: present
+
+- name: copy files into webroot
+  become: yes
+  copy:
+    src: "{{role_path}}/files/"
+    dest: "{{web_root}}"
+    owner: www-data
+    group: www-data
+
+- name: Update web server root
+  become: yes
+  lineinfile:
+    path: /etc/nginx/sites-enabled/default
+    regexp: '^(\s*root) .*;'
+    line: '\1 {{web_root}};'
+    backrefs: yes
+
+- name: Start the Web Service
+  become: yes
+  service:
+    name: nginx
+    state: restarted

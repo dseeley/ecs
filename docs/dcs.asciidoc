@@ -1,0 +1,7 @@
+= Dougal Common Schema (DCS) Reference
+:doctype: book
+:ecs: DCS
+:toc: left
+
+include::fields.asciidoc[]
+include::field-values.asciidoc[]
