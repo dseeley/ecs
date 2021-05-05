@@ -98,8 +98,8 @@ node {
         }
 
         if (params.CLOUD_REGION && params.BUILDENV && params.CLUSTER_ID) {
-            sh 'mkdir -p dougabuild/roles/docserver/files'
-            sh 'cp -R docs/*.html generated dougabuild/roles/docserver/files'
+            sh 'mkdir -p _UTIL_BUILD/roles/docserver/files'
+            sh 'cp -R docs/*.html generated _UTIL_BUILD/roles/docserver/files'
 
             def (CLOUD_TYPE, REGION) = params.CLOUD_REGION.split('/')
 
