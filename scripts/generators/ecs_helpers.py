@@ -2,6 +2,8 @@ import glob
 import os
 import yaml
 import git
+import pathlib
+import warnings
 
 from collections import OrderedDict
 from copy import deepcopy
@@ -112,6 +114,22 @@ def get_tree_by_ref(ref):
     return commit.tree
 
 
+def path_exists_in_git_tree(tree, file_path):
+    try:
+        _ = tree[file_path]
+    except KeyError:
+        return False
+    return True
+
+
+def usage_doc_files():
+    usage_docs_dir = os.path.join(os.path.dirname(__file__), '../../docs/usage')
+    usage_docs_path = pathlib.Path(usage_docs_dir)
+    if usage_docs_path.is_dir():
+        return [x.name for x in usage_docs_path.glob('*.asciidoc') if x.is_file()]
+    return []
+
+
 def ecs_files():
     """Return the schema file list to load"""
     schema_glob = os.path.join(os.path.dirname(__file__), '../../schemas/*.yml')
@@ -159,3 +177,17 @@ def list_extract_keys(lst, key_name):
 def is_intermediate(field):
     '''Encapsulates the check to see if a field is an intermediate field or a "real" field.'''
     return ('intermediate' in field['field_details'] and field['field_details']['intermediate'])
+
+
+# Warning helper
+
+
+def strict_warning(msg):
+    """Call warnings.warn(msg) for operations that would throw an Exception
+       if operating in `--strict` mode. Allows a custom message to be passed.
+
+    :param msg: custom text which will be displayed with wrapped boilerplate
+                for strict warning messages.
+    """
+    warn_message = f"{msg}\n\nThis will cause an exception when running in strict mode.\nWarning check:"
+    warnings.warn(warn_message, stacklevel=3)
