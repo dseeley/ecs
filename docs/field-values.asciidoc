@@ -2,13 +2,6 @@
 [[ecs-category-field-values-reference]]
 == {ecs} Categorization Fields
 
-WARNING: This section of ECS is in beta and is subject to change. These allowed values
-are still under active development. Additional values will be published gradually,
-and some of the values or relationships described here may change.
-Users who want to provide feedback, or who want to have a look at
-upcoming allowed values can visit this public feedback document
-https://ela.st/ecs-categories-draft.
-
 At a high level, ECS provides fields to classify events in two different ways:
 "Where it's from" (e.g., `event.module`, `event.dataset`, `agent.type`, `observer.type`, etc.),
 and "What it is." The categorization fields hold the "What it is" information,
@@ -29,6 +22,13 @@ NOTE: If your events don't match any of these categorization values, you should
 leave the fields empty. This will ensure you can start populating the fields
 once the appropriate categorization values are published, in a later release.
 
+[float]
+[[ecs-category-usage]]
+=== Categorization Usage
+
+<<ecs-using-the-categorization-fields,Using the categorization fields>> contains examples combining the categorization fields to classify different types of events.
+
+
 [[ecs-allowed-values-event-kind]]
 === ECS Categorization Field: event.kind
 
@@ -37,11 +37,6 @@ This is one of four ECS Categorization Fields, and indicates the highest level i
 `event.kind` gives high-level information about what type of information the event contains, without being specific to the contents of the event. For example, values of this field distinguish alert events from metric events.
 
 The value of this field can be used to inform how these kinds of events should be handled. They may warrant different retention, different access control, it may also help understand whether the data coming in at a regular interval or not.
-
-WARNING: After the beta period for categorization, only the allowed categorization
-values listed in the ECS repository and official ECS documentation should be considered
-official. Use of any other values may result in incompatible implementations
-that will require subsequent breaking changes.
 
 *Allowed Values*
 
@@ -125,14 +120,10 @@ This is one of four ECS Categorization Fields, and indicates the second level in
 
 This field is an array. This will allow proper categorization of some events that fall in multiple categories.
 
-WARNING: After the beta period for categorization, only the allowed categorization
-values listed in the ECS repository and official ECS documentation should be considered
-official. Use of any other values may result in incompatible implementations
-that will require subsequent breaking changes.
-
 *Allowed Values*
 
 * <<ecs-event-category-authentication,authentication>>
+* <<ecs-event-category-configuration,configuration>>
 * <<ecs-event-category-database,database>>
 * <<ecs-event-category-driver,driver>>
 * <<ecs-event-category-file,file>>
@@ -143,6 +134,8 @@ that will require subsequent breaking changes.
 * <<ecs-event-category-network,network>>
 * <<ecs-event-category-package,package>>
 * <<ecs-event-category-process,process>>
+* <<ecs-event-category-registry,registry>>
+* <<ecs-event-category-session,session>>
 * <<ecs-event-category-web,web>>
 
 [float]
@@ -155,6 +148,20 @@ Events in this category are related to the challenge and response process in whi
 *Expected event types for category authentication:*
 
 start, end, info
+
+
+[float]
+[[ecs-event-category-configuration]]
+==== configuration
+
+Events in the configuration category have to deal with creating, modifying, or deleting the settings or parameters of an application, process, or system.
+
+Example sources include security policy change logs, configuration auditing logging, and system integrity monitoring.
+
+
+*Expected event types for category configuration:*
+
+access, change, creation, deletion, info
 
 
 [float]
@@ -284,6 +291,30 @@ access, change, end, info, start
 
 
 [float]
+[[ecs-event-category-registry]]
+==== registry
+
+Having to do with settings and assets stored in the Windows registry. Use this category to visualize and analyze activity such as registry access and modifications.
+
+
+*Expected event types for category registry:*
+
+access, change, creation, deletion
+
+
+[float]
+[[ecs-event-category-session]]
+==== session
+
+The session category is applied to events and metrics regarding logical persistent connections to hosts and services. Use this category to visualize and analyze interactive or automated persistent connections between assets. Data for this category may come from Windows Event logs, SSH logs, or stateless sessions such as HTTP cookie-based sessions, etc.
+
+
+*Expected event types for category session:*
+
+start, end, info
+
+
+[float]
 [[ecs-event-category-web]]
 ==== web
 
@@ -303,11 +334,6 @@ This is one of four ECS Categorization Fields, and indicates the third level in 
 `event.type` represents a categorization "sub-bucket" that, when used along with the `event.category` field values, enables filtering events down to a level appropriate for single visualization.
 
 This field is an array. This will allow proper categorization of some events that fall in multiple event types.
-
-WARNING: After the beta period for categorization, only the allowed categorization
-values listed in the ECS repository and official ECS documentation should be considered
-official. Use of any other values may result in incompatible implementations
-that will require subsequent breaking changes.
 
 *Allowed Values*
 
@@ -439,10 +465,6 @@ The installation event type is used for the subset of events within a category t
 The protocol event type is used for the subset of events within a category that indicate that they contain protocol details or analysis, beyond simply identifying the protocol. Generally, network events that contain specific protocol details will fall into this subcategory. A common example is `event.category:network AND event.type:protocol AND event.type:connection AND event.type:end` (to indicate that the event is a network connection event sent at the end of a connection that also includes a protocol detail breakdown). Note that events that only indicate the name or id of the protocol should not use the protocol value. Further note that when the protocol subcategory is used, the identified protocol is populated in the ECS `network.protocol` field.
 
 
-*Expected event types for category protocol:*
-
-access, change, end, info, start
-
 
 [float]
 [[ecs-event-type-start]]
@@ -473,11 +495,6 @@ Also note that in the case of a compound event (a single event that contains mul
 
 Further note that not all events will have an associated outcome. For example, this field is generally not populated for metric events, events with `event.type:info`, or any events for which an outcome does not make logical sense.
 
-WARNING: After the beta period for categorization, only the allowed categorization
-values listed in the ECS repository and official ECS documentation should be considered
-official. Use of any other values may result in incompatible implementations
-that will require subsequent breaking changes.
-
 *Allowed Values*
 
 * <<ecs-event-outcome-failure,failure>>
@@ -507,3 +524,6 @@ Indicates that this event describes a successful result. A common example is `ev
 Indicates that this event describes only an attempt for which the result is unknown from the perspective of the event producer. For example, if the event contains information only about the request side of a transaction that results in a response, populating `event.outcome:unknown` in the request event is appropriate. The unknown value should not be used when an outcome doesn't make logical sense for the event. In such cases `event.outcome` should not be populated.
 
 
+
+
+include::field-values-usage.asciidoc[]
