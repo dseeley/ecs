@@ -157,6 +157,20 @@ class TestSchemaCleaner(unittest.TestCase):
                                         "mandatory attributes: {}".format(missing_attribute)):
                 cleaner.field_mandatory_attributes(field)
 
+    def test_field_raises_on_alias_missing_path_attribute(self):
+        field = self.schema_process()['process']['fields']['pid']
+        field['field_details']['type'] = "alias"
+        with self.assertRaisesRegex(ValueError,
+                                    "mandatory attributes: {}".format("path")):
+            cleaner.field_mandatory_attributes(field)
+
+    def test_raises_on_missing_scaling_factor(self):
+        field = self.schema_process()['process']['fields']['pid']
+        field['field_details']['type'] = "scaled_float"
+        with self.assertRaisesRegex(ValueError,
+                                    "mandatory attributes: {}".format("scaling_factor")):
+            cleaner.field_mandatory_attributes(field)
+
     def test_field_simple_cleanup(self):
         my_field = {
             'field_details': {
@@ -208,6 +222,10 @@ class TestSchemaCleaner(unittest.TestCase):
         field_details = {**field_min_details, **{'index': False}}
         cleaner.field_defaults({'field_details': field_details})
         self.assertEqual(field_details['doc_values'], False)
+
+        field_details = {**field_min_details, **{'type': 'wildcard', 'index': True}}
+        cleaner.field_defaults({'field_details': field_details})
+        self.assertNotIn('index', field_details)
 
     def test_field_defaults_dont_override(self):
         field_details = {
@@ -261,6 +279,84 @@ class TestSchemaCleaner(unittest.TestCase):
             'short': "multiple\nlines"}}
         with self.assertRaisesRegex(ValueError, 'single line'):
             cleaner.single_line_short_description(schema)
+
+    def test_very_long_short_description_warns_strict_disabled(self):
+        schema = {'field_details': {
+            'name': 'fake_schema',
+            'short': "Single line but really long. " * 10}}
+        try:
+            with self.assertWarnsRegex(UserWarning, 'under 120 characters \(current length: 290\)'):
+                cleaner.single_line_short_description(schema, strict=False)
+        except Exception:
+            self.fail("cleaner.single_line_short_description() raised Exception unexpectedly.")
+
+    def test_multiline_short_description_warns_strict_disabled(self):
+        schema = {'field_details': {
+            'name': 'fake_schema',
+            'short': "multiple\nlines"}}
+        try:
+            with self.assertWarnsRegex(UserWarning, 'single line'):
+                cleaner.single_line_short_description(schema, strict=False)
+        except Exception:
+            self.fail("cleaner.single_line_short_description() raised Exception unexpectedly.")
+
+    def test_field_example_value_is_object_raises(self):
+        field = {
+            'field_details': {
+                'name': 'test',
+                'example': {
+                    'a': 'bob',
+                    'b': 'alice'
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, 'contains an object or array'):
+            cleaner.check_example_value(field)
+
+    def test_field_example_value_is_array_raises(self):
+        field = {
+            'field_details': {
+                'name': 'test',
+                'example': [
+                    'bob',
+                    'alice'
+                ]
+            }
+        }
+        with self.assertRaisesRegex(ValueError, 'contains an object or array'):
+            cleaner.check_example_value(field)
+
+    def test_example_field_value_is_object_warns_strict_disabled(self):
+        field = {
+            'field_details': {
+                'name': 'test',
+                'example': {
+                    'a': 'bob',
+                    'b': 'alice'
+                }
+            }
+        }
+        try:
+            with self.assertWarnsRegex(UserWarning, 'contains an object or array'):
+                cleaner.check_example_value(field, strict=False)
+        except Exception:
+            self.fail("cleaner.check_example_value() raised Exception unexpectedly.")
+
+    def test_example_field_value_is_array_warns_strict_disabled(self):
+        field = {
+            'field_details': {
+                'name': 'test',
+                'example': [
+                    'bob',
+                    'alice'
+                ]
+            }
+        }
+        try:
+            with self.assertWarnsRegex(UserWarning, 'contains an object or array'):
+                cleaner.check_example_value(field, strict=False)
+        except Exception:
+            self.fail("cleaner.check_example_value() raised Exception unexpectedly.")
 
     def test_clean(self):
         '''A high level sanity test'''
