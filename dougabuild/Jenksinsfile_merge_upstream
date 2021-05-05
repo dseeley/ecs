@@ -18,49 +18,61 @@ node {
     echo "Params: $params"
 
     stage('Create upstream merge PR') {
-        checkout([$class: 'GitSCM', branches: [[name: "*/master"]], extensions: [[$class: 'WipeWorkspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: params.GIT_CREDS ? params.GIT_CREDS : '', url: PROJECT_URL]]])
+        checkout([$class: 'GitSCM', branches: [[name: "master"]], extensions: [[$class: 'LocalBranch'], [$class: 'WipeWorkspace']], submoduleCfg: [], userRemoteConfigs: [[credentialsId: params.GIT_CREDS ? params.GIT_CREDS : '', url: PROJECT_URL]]])
         def currentHeadRev = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
 
         withCredentials([usernamePassword(credentialsId: params.GIT_CREDS, passwordVariable: 'GIT_TOKEN_PSW', usernameVariable: 'GIT_TOKEN_USR')]) {
             def apiUrlUpstream = "https://api.github.com/repos/" + UPSTREAM_URL.replaceFirst("^(http[s]?://[^/]+/)", "") + "/releases"
             def latestReleaseQuery = sh(returnStdout: true, script: "curl -s -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X GET ${apiUrlUpstream}/latest").trim()
-            def latestElasticRelease = readJSON text: "${latestReleaseQuery}"
-            println(latestElasticRelease)
+            def latestUpstreamECSRelease = readJSON text: "${latestReleaseQuery}"
+            println(latestUpstreamECSRelease)
 
-            sh "git config user.name ${params.GIT_CREDS}"
-            sh "git config user.email ${params.GIT_CREDS}"
-            sh "git remote add upstream ${UPSTREAM_URL}.git"
-            sh "git fetch upstream"
+            def apiUrlProject = "https://api.github.com/repos/" + PROJECT_URL.replaceFirst("^(http[s]?://[^/]+/)", "")
+            def releasePRBranch = "ecs_merge__${latestUpstreamECSRelease.tag_name}"
 
-            def ECSReleaseBody = sh(returnStdout: true, script: "git log HEAD..${latestElasticRelease.tag_name} --pretty=format:\"<li> %H - %s</li>\"").trim()
-//            def ECSReleaseBody = sh(returnStdout: true, script: "git log ${currentHeadRev}..HEAD --pretty=format:\"<li> %H - %s</li>\"").trim()
-            println(ECSReleaseBody)
-            if (ECSReleaseBody != "") {
-                def apiUrlProject = "https://api.github.com/repos/" + PROJECT_URL.replaceFirst("^(http[s]?://[^/]+/)", "")
-                def releasePRBranch = "ecs_merge__${latestElasticRelease.tag_name}"
+            def checkPRQuery = sh(returnStdout: true, script: "curl -vvv -s --fail  -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X GET ${apiUrlProject}/pulls?head=${releasePRBranch}").trim()
+            def checkPR = readJSON text: checkPRQuery
+            println(checkPR)
 
-                def checkPRQuery = sh(returnStdout: true, script: "curl -vvv -s --fail  -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X GET ${apiUrlProject}/pulls?head=${releasePRBranch}").trim()
-                def checkPR = readJSON text: "${checkPRQuery}"
-                println(checkPR)
-
-                if ("${checkPR.size()}" > 0) {
-                    error "Pull Request May Already Exist!"
-                } else {
-                    sh "git branch ${releasePRBranch}"
-                    sh "git checkout ${releasePRBranch}"
-//                    sh 'git commit -m "Automated upstream ECS merge of ' + latestElasticRelease.tag_name + '"'
-
-                    def latestElasticReleaseBranch = sh(returnStdout: true, script: "git branch -r --contains tags/${latestElasticRelease.tag_name}").trim()
-                    def repoUrlWithAuth = "https://${GIT_TOKEN_USR}:${GIT_TOKEN_PSW}@github.com/" + PROJECT_URL.replaceFirst("^(http[s]?://[^/]+/)", "") + ".git"
-                    sh "git merge ${latestElasticReleaseBranch}"
-                    sh "git push --repo=${repoUrlWithAuth} --set-upstream ${repoUrlWithAuth}  ${releasePRBranch}"
-
-                    def PRPayload = JsonOutput.toJson(["title": "Upstream ECS merge of ${latestElasticRelease.tag_name}", "body": "${ECSReleaseBody}", "head": "${releasePRBranch}", "base": "master"])
-                    println(PRPayload)
-                    sh "curl -vvv -s --fail -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X POST -d '${PRPayload}' ${apiUrlProject}/pulls"
-                }
+            if (checkPR.size() > 0) {
+                error "Pull Request May Already Exist!"
             } else {
-                echo "There are no release changes"
+                sh "git config user.name ${params.GIT_CREDS}"
+                sh "git config user.email ${params.GIT_CREDS}"
+                sh "git remote add upstream ${UPSTREAM_URL}.git"
+                sh "git fetch upstream"
+
+                def ECSNumChanges = sh(returnStdout: true, script: 'git status --porcelain=v1 2>/dev/null | wc -l').trim() as int
+                println(ECSNumChanges)
+                def ECSReleaseBody = sh(returnStdout: true, script: "git log HEAD..${latestUpstreamECSRelease.tag_name} --pretty=format:\"+ %s\"").trim()
+                println(ECSReleaseBody)
+                if (ECSReleaseBody != "" && ECSNumChanges > 0) {
+                    def latestUpstreamEcsReleaseBranch = sh(returnStdout: true, script: "git branch -r --contains tags/${latestUpstreamECSRelease.tag_name} | grep '^ *upstream/'").trim()
+
+                    def existingReleasePRBranch = sh(returnStdout: true, script: "git branch -r --contains origin/${releasePRBranch} 2>/dev/null || true").trim()
+                    if (existingReleasePRBranch == "") {
+                        sh "git checkout -b ${releasePRBranch}"
+                    } else {
+                        sh "git checkout --track ${existingReleasePRBranch}"
+                    }
+
+                    def projectRepoUrlWithAuth = "https://${GIT_TOKEN_USR}:${GIT_TOKEN_PSW}@github.com/" + PROJECT_URL.replaceFirst("^(http[s]?://[^/]+/)", "") + ".git"
+                    sh "git merge ${latestUpstreamEcsReleaseBranch}"
+                    sh "git push --repo=${projectRepoUrlWithAuth} --set-upstream ${projectRepoUrlWithAuth}  ${releasePRBranch}"
+
+                    def prRestPayload = JsonOutput.prettyPrint(JsonOutput.toJson(["title": "Upstream ECS merge of ${latestUpstreamECSRelease.tag_name}", "body": ECSReleaseBody, "head": PROJECT_URL.replaceFirst("http[s]?://[^/]+/([^/]+).*", '$1') + ":${releasePRBranch}", "base": "master"])).replaceAll("'", "'\\\\''")
+//                    println(prRestPayload)
+
+                    try {
+                        sh "curl --fail -S -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X POST -d '${prRestPayload}' ${apiUrlProject}/pulls"
+                    } catch (Exception e) {
+                        sh "curl --verbose -H \"Authorization: Token ${GIT_TOKEN_PSW}\" -H \"Accept: application/json\" -H \"Content-type: application/json\" -X POST -d '${prRestPayload}' ${apiUrlProject}/pulls"
+                        error "PR creation fail.  " + +e.toString()
+                    }
+
+                } else {
+                    echo "There are no changes to merge for this release."
+                }
             }
         }
     }
