@@ -3,6 +3,240 @@
 # CHANGELOG
 All notable changes to this project will be documented in this file based on the [Keep a Changelog](http://keepachangelog.com/) Standard. This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.9.0](https://github.com/elastic/ecs/compare/v1.8.0...v1.9.0)
+
+### Schema Changes
+
+#### Added
+
+* Added `hash.ssdeep`. #1169
+* Added `cloud.service.name`. #1204
+* Added `http.request.id`. #1208
+* `data_stream.*` fieldset introduced in experimental schema and artifacts. #1215
+* Added `geo.timezone`, `geo.postal_code`, and `geo.continent_code`. #1229
+* Added `beta` host metrics fields. #1248
+* Added `code_signature.team_id`, `code_signature.signing_id`. #1249
+* Extended `pe` fields added to experimental schema. #1256
+* Add `elf` fieldset to experimental schema. #1261
+* Add `threat.indicator` fields to experimental schema. #1268
+
+#### Improvements
+
+* Include formatting guidance and examples for MAC address fields. #456
+* New section in ECS detailing event categorization fields usage. #1242
+* `user.changes.*`, `user.effective.*`, and `user.target.*` field reuses are GA. #1271
+
+### Tooling and Artifact Changes
+
+#### Improvements
+
+* Update Python dependencies #1310, #1318
+* Adjustments to use terminology that doesn't have negative connotation. #1315
+
+
+## [1.8.0](https://github.com/elastic/ecs/compare/v1.7.0...v1.8.0)
+
+### Schema Changes
+
+#### Bugfixes
+
+* Clean up `event.reference` description. #1181
+* Go code generator fails if `scaled_float` type is used. #1250
+
+#### Added
+
+* Added `event.category` "registry". #1040
+* Added `event.category` "session". #1049
+* Added usage documentation for `user` fields. #1066
+* Added `user` fields at `user.effective.*`, `user.target.*` and `user.changes.*`. #1066
+* Added `os.type`. #1111
+
+#### Improvements
+
+* Event categorization fields GA. #1067
+* Note `[` and `]` bracket characters may enclose a literal IPv6 address when populating `url.domain`. #1131
+* Reinforce the exclusion of the leading dot from `url.extension`. #1151
+
+#### Deprecated
+
+* Deprecated `host.user.*` fields for removal at the next major. #1066
+
+### Tooling and Artifact Changes
+
+#### Bugfixes
+
+* `tracing` fields should be at root of Beats `fields.ecs.yml` artifacts. #1164
+
+#### Added
+
+* Added the `path` key when type is `alias`, to support the [alias field type](https://www.elastic.co/guide/en/elasticsearch/reference/current/alias.html). #877
+* Added support for `scaled_float`'s mandatory parameter `scaling_factor`. #1042
+* Added ability for --oss flag to fall back `constant_keyword` to `keyword`. #1046
+* Added support in the generated Go source go for `wildcard`, `version`, and `constant_keyword` data types. #1050
+* Added support for marking fields, field sets, or field reuse as beta in the documentation. #1051
+* Added support for `constant_keyword`'s optional parameter `value`. #1112
+* Added component templates for ECS field sets. #1156, #1186, #1191
+* Added functionality for merging custom and core multi-fields. #982
+
+#### Improvements
+
+* Make all fields linkable directly. #1148
+* Added a notice highlighting that the `tracing` fields are not nested under the
+  namespace `tracing.` #1162
+* ES 6.x template data types will fallback to supported types. #1171, #1176, #1186
+* Add a documentation page discussing the experimental artifacts. #1189
+
+## [1.7.0](https://github.com/elastic/ecs/compare/v1.6.0...v1.7.0)
+
+### Schema Changes
+
+#### Bugfixes
+
+* The `protocol` allowed value under `event.type` should not have the `expected_event_types` defined. #964
+* Clarify the definition of `file.extension` (no dots). #1016
+
+#### Added
+
+* Added Mime Type fields to HTTP request and response. #944
+* Added network directions ingress and egress. #945
+* Added `threat.technique.subtechnique` to capture MITRE ATT&CK® subtechniques. #951
+* Added `configuration` as an allowed `event.category`. #963
+* Added a new directory with experimental artifacts, which includes all changes
+  from RFCs that have reached stage 2. #993, #1053, #1115, #1117, #1118
+
+#### Improvements
+
+* Expanded field set definitions for `source.*` and `destination.*`. #967
+* Provided better guidance for mapping network events. #969
+* Added the field `.subdomain` under `client`, `destination`, `server`, `source`
+  and `url`, to match its presence at `dns.question.subdomain`. #981
+* Clarified ambiguity in guidance on how to use x509 fields for connections with
+  only one certificate. #1114
+
+### Tooling and Artifact Changes
+
+#### Breaking changes
+
+* Changed the index pattern of the sample Elasticsearch template from `ecs-*` to
+  `try-ecs-*` to avoid conflicting with Logstash' `ecs-logstash-*`. #1048
+
+#### Bugfixes
+
+* Addressed issue where foreign reuses weren't using the user-supplied `as` value for their destination. #960
+* Experimental artifacts failed to install due to `event.original` index setting. #1053
+
+#### Added
+
+* Introduced `--strict` flag to perform stricter schema validation when running the generator script. #937
+* Added check under `--strict` that ensures composite types in example fields are quoted. #966
+* Added `ignore_above` and `normalizer` support for keyword multi-fields. #971
+* Added ability to supply free-form usage documentation per fieldset. #988
+* Added `--oss` flag for users who want to generate ECS templates for use on OSS clusters. #991
+
+#### Improvements
+
+* Field details Jinja2 template components have been consolidated into one template #897
+* Add `[discrete]` marker before each section header in field details. #989
+* `--ref` now loads `experimental/schemas` based on git ref in addition to `schemas`. #1063
+
+
+## [1.6.0](https://github.com/elastic/ecs/compare/v1.5.0...v1.6.0)
+
+### Schema Changes
+
+#### Bugfixes
+
+* Field `registry.data.strings` should have been marked as an array field. #790
+
+#### Added
+
+* Added `x509.*` field set. #762
+* Add architecture and imphash for PE field set. #763
+* Added `agent.build.*` for extended agent version information. #764
+* Added `log.file.path` to capture the log file an event came from. #802
+* Added more account and project cloud metadata. #816
+* Added missing field reuse of `pe` at `process.parent.pe` #868
+* Added `span.id` to the tracing fieldset, for additional log correlation #882
+* Added `event.reason` for the reason why an event's outcome or action was taken. #907
+* Added `user.roles` to capture a list of role names that apply to the user. #917
+
+#### Improvements
+
+* Removed misleading pluralization in the description of `user.id`, it should
+  contain one ID, not many. #801
+* Clarified misleading wording about multiple IPs in src/dst or cli/srv. #804
+* Improved verbiage about the MITRE ATT&CK® framework. #866
+* Removed the default `object_type=keyword` that was being applied to `object` fields.
+  This attribute is Beats-specific. It's still supported, but needs to be set explicitly
+  on a case by case basis now. This default being removed affects `dns.answers`,
+  `log.syslog`, `network.inner`, `observer.egress`, and `observer.ingress`. #871
+* Improved attribute `dashed_name` in `generated/ecs/*.yml` to also
+  replace `@` with `-`. #871
+* Updated several URLs in the documentation with "example.com" domain. #910
+
+#### Deprecated
+
+* Deprecate guidance to lowercase `http.request.method` #840
+
+
+### Tooling and Artifact Changes
+
+#### Breaking changes
+
+* Removed field definitions at the root of documents for fieldsets that
+  had `reusable.top_level:false`. This PR affects `ecs_flat.yml`, the csv file
+  and the sample Elasticsearch templates. #495, #813
+* Removed the `order` attribute from the `ecs_nested.yml` and `ecs_flat.yml` files. #811
+* In `ecs_nested.yml`, the array of strings that used to be in `reusable.expected`
+  has been replaced by an array of objects with 3 keys: 'as', 'at' and 'full'. #864
+* The subset format now requires `name` and `fields` keys at the top level. #873
+
+#### Bugfixes
+
+* Subsets are created after duplicating reusable fields now so subsets can
+  be applied to each reused instance independently. #753
+* Quoted the example for `labels` to avoid YAML interpreting it, and having
+  slightly different results in different situations. #782
+* Fix incorrect listing of where field sets are nested in asciidoc,
+  when they are nested deep. #784
+* Allow beats output to be generated when using `--include` or `--subset` flags. #814
+* Field parameter `index` is now correctly populated in the Beats field definition file. #824
+
+#### Improvements
+
+* Add support for reusing official fieldsets in custom schemas. #751
+* Add full path names to reused fieldsets in `nestings` array in `ecs_nested.yml`. #803
+* Allow shorthand notation for including all subfields in subsets. #805
+* Add support for Elasticsearch `enabled` field parameter. #824
+* Add `ref` option to generator allowing schemas to be built for a specific ECS version. #851
+* Add `template-settings` and `mapping-settings` options to allow override of defaults in generated ES templates. #856
+* When overriding ECS field sets via the `--include` flag, it's no longer necessary
+  to duplicate the field set's mandatory attributes. The customizations are merged
+  before validation. #864
+* Add ability to nest field sets as another name. #864
+* Add ability to nest field sets within themselves (e.g. `process` => `process.parent`). #864
+* New attribute `reused_here` is added in `ecs_nested.yml`. It obsoletes the
+  previous attribute `nestings`, and is able to fully capture details of other
+  field sets reused under this one. #864
+* When chained reuses are needed (e.g. `group` => `user`, then `user` => many places),
+  it's now necessary to force the order with new attribute `reusable.order`. This
+  attribute is otherwise optional. It's currently only needed for `group`. #864
+* There's a new representation of ECS at `generated/ecs/ecs.yml`, which is a deeply nested
+  representation of the fields. This file is not in git, as it's only meant for
+  developers working on the ECS tools. #864
+* Jinja2 templates now define the doc structure for the AsciiDoc generator. #865
+* Intermediate `ecs_flat.yml` and `ecs_nested.yml` files are now generated for each individual subset,
+  in addition to the intermediate files generated for the combined subset. #873
+
+#### Deprecated
+
+* In `ecs_nested.yml`, we're deprecating the attribute `nestings`. It will be
+  removed in a future release. The deprecated `nestings` attribute was an array of
+  flat field names describing where fields are nested within the field set.
+  This is replaced with the attribute `reused_here`, which is an array of objects.
+  The new format still lists where the fields are nested via the same flat field name,
+  but also specifies additional information about each field reuse. #864
+
 
 ## [1.5.0](https://github.com/elastic/ecs/compare/v1.4.0...v1.5.0)
 
