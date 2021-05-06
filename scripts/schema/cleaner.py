@@ -19,7 +19,9 @@ from schema import visitor
 # deal with final field names either.
 
 
-def clean(fields):
+def clean(fields, strict=False):
+    global strict_mode
+    strict_mode = strict
     visitor.visit_fields(fields, fieldset_func=schema_cleanup, field_func=field_cleanup)
 
 
@@ -46,7 +48,7 @@ def schema_cleanup(schema):
     else:
         schema['schema_details']['prefix'] = schema['field_details']['name'] + '.'
     normalize_reuse_notation(schema)
-    # Final validity check
+    # Final validity check if in strict mode
     schema_assertions_and_warnings(schema)
 
 
@@ -73,7 +75,9 @@ def schema_mandatory_attributes(schema):
 
 def schema_assertions_and_warnings(schema):
     '''Additional checks on a fleshed out schema'''
-    single_line_short_description(schema)
+    single_line_short_description(schema, strict=strict_mode)
+    if 'beta' in schema['field_details']:
+        single_line_beta_description(schema, strict=strict_mode)
 
 
 def normalize_reuse_notation(schema):
@@ -142,6 +146,9 @@ def field_or_multi_field_datatype_defaults(field_details):
         field_details.setdefault('ignore_above', 1024)
     if field_details['type'] == 'text':
         field_details.setdefault('norms', False)
+    # wildcard needs the index param stripped
+    if field_details['type'] == 'wildcard':
+        field_details.pop('index', None)
     if 'index' in field_details and not field_details['index']:
         field_details.setdefault('doc_values', False)
 
@@ -156,6 +163,14 @@ def field_mandatory_attributes(field):
         return
     current_field_attributes = sorted(field['field_details'].keys())
     missing_attributes = ecs_helpers.list_subtract(FIELD_MANDATORY_ATTRIBUTES, current_field_attributes)
+
+    # `alias` fields require a target `path` attribute.
+    if field['field_details'].get('type') == 'alias' and 'path' not in current_field_attributes:
+        missing_attributes.append('path')
+    # `scaled_float` fields require a `scaling_factor` attribute.
+    if field['field_details'].get('type') == 'scaled_float' and 'scaling_factor' not in current_field_attributes:
+        missing_attributes.append('scaling_factor')
+
     if len(missing_attributes) > 0:
         msg = "Field is missing the following mandatory attributes: {}.\nFound these: {}.\nField details: {}"
         raise ValueError(msg.format(', '.join(missing_attributes),
@@ -165,7 +180,11 @@ def field_mandatory_attributes(field):
 def field_assertions_and_warnings(field):
     '''Additional checks on a fleshed out field'''
     if not ecs_helpers.is_intermediate(field):
-        single_line_short_description(field)
+        # check short description length if in strict mode
+        single_line_short_description(field, strict=strict_mode)
+        check_example_value(field, strict=strict_mode)
+        if 'beta' in field['field_details']:
+            single_line_beta_description(field, strict=strict_mode)
         if field['field_details']['level'] not in ACCEPTABLE_FIELD_LEVELS:
             msg = "Invalid level for field '{}'.\nValue: {}\nAcceptable values: {}".format(
                 field['field_details']['name'], field['field_details']['level'],
@@ -178,7 +197,7 @@ def field_assertions_and_warnings(field):
 SHORT_LIMIT = 120
 
 
-def single_line_short_description(schema_or_field):
+def single_line_short_description(schema_or_field, strict=True):
     short_length = len(schema_or_field['field_details']['short'])
     if "\n" in schema_or_field['field_details']['short'] or short_length > SHORT_LIMIT:
         msg = "Short descriptions must be single line, and under {} characters (current length: {}).\n".format(
@@ -186,4 +205,32 @@ def single_line_short_description(schema_or_field):
         msg += "Offending field or field set: {}\nShort description:\n  {}".format(
             schema_or_field['field_details']['name'],
             schema_or_field['field_details']['short'])
-        raise ValueError(msg)
+        if strict:
+            raise ValueError(msg)
+        else:
+            ecs_helpers.strict_warning(msg)
+
+
+def check_example_value(field, strict=True):
+    """
+    Checks if value of the example field is of type list or dict.
+    Fails or warns (depending on strict mode) if so.
+    """
+    example_value = field['field_details'].get('example', None)
+    if isinstance(example_value, (list, dict)):
+        name = field['field_details']['name']
+        msg = f"Example value for field `{name}` contains an object or array which must be quoted to avoid YAML interpretation."
+        if strict:
+            raise ValueError(msg)
+        else:
+            ecs_helpers.strict_warning(msg)
+
+
+def single_line_beta_description(schema_or_field, strict=True):
+    if "\n" in schema_or_field['field_details']['beta']:
+        msg = "Beta descriptions must be single line.\n"
+        msg += f"Offending field or field set: {schema_or_field['field_details']['name']}"
+        if strict:
+            raise ValueError(msg)
+        else:
+            ecs_helpers.strict_warning(msg)
