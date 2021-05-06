@@ -110,7 +110,7 @@ node {
 
             stage('Build docserver') {
                 dir('_UTIL_BUILD') {
-                    sh "ansible-playbook -e cloud_type=${CLOUD_TYPE} -e region=${REGION} -e buildenv=${params.BUILDENV} -e clusterid=${params.CLUSTER_ID} cluster.yml $APP_NAME -vvv"
+                    sh "ansible-playbook -e cloud_type=${CLOUD_TYPE} -e region=${REGION} -e buildenv=${params.BUILDENV} -e clusterid=${params.CLUSTER_ID} cluster.yml ${APP_NAME} -vvv"
                 }
             }
         }

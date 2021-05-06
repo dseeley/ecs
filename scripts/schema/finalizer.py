@@ -57,17 +57,19 @@ def perform_reuse(fields):
             schema = fields[schema_name]
             for reuse_entry in reuse_entries:
                 # print(order, "{} => {}".format(schema_name, reuse_entry['full']))
+                nest_as = reuse_entry['as']
                 destination_schema_name = reuse_entry['full'].split('.')[0]
                 destination_schema = fields[destination_schema_name]
                 ensure_valid_reuse(schema, destination_schema)
 
                 new_field_details = copy.deepcopy(schema['field_details'])
+                new_field_details['name'] = nest_as
                 new_field_details['original_fieldset'] = schema_name
                 new_field_details['intermediate'] = True
                 reused_fields = copy.deepcopy(schema['fields'])
                 set_original_fieldset(reused_fields, schema_name)
                 destination_fields = field_group_at_path(reuse_entry['at'], fields)
-                destination_fields[schema_name] = {
+                destination_fields[nest_as] = {
                     'field_details': new_field_details,
                     'fields': reused_fields,
                 }
@@ -126,6 +128,9 @@ def append_reused_here(reused_schema, reuse_entry, destination_schema):
         'full': reuse_entry['full'],
         'short': reused_schema['field_details']['short'],
     }
+    # Check for beta attribute
+    if 'beta' in reuse_entry:
+        reused_here_entry['beta'] = reuse_entry['beta']
     destination_schema['schema_details']['reused_here'].extend([reused_here_entry])
 
 
@@ -171,7 +176,7 @@ def field_finalizer(details, path):
     name_array = path + [details['field_details']['node_name']]
     flat_name = '.'.join(name_array)
     details['field_details']['flat_name'] = flat_name
-    details['field_details']['dashed_name'] = re.sub('[@_\.]', '-', flat_name)
+    details['field_details']['dashed_name'] = re.sub('[_\.]', '-', flat_name).replace('@', '')
     if 'multi_fields' in details['field_details']:
         for mf in details['field_details']['multi_fields']:
             mf['flat_name'] = flat_name + '.' + mf['name']
