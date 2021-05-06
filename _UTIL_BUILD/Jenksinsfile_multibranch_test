@@ -1,0 +1,9 @@
+#!groovy
+
+node {
+    stage('Build docs') {
+        build job: 'ecs/ecs_docserver', parameters: [string(name: 'APP_NAME', value: "")]
+//        slackUploadFile channel: "#dougaltest", filePath: "docs/index.html", initialComment: "SCS Build results", credentialId: "DCSSlackToken"
+//        slackSend channel: "#dougaltest", message: "Build Started: ${env.JOB_NAME} ${env.BUILD_NUMBER}", tokenCredentialId: "DCSSlackToken"
+    }
+}
