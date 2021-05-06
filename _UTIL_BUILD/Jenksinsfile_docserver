@@ -104,7 +104,7 @@ node {
             def (CLOUD_TYPE, REGION) = params.CLOUD_REGION.split('/')
 
             String APP_NAME = ""
-            if (params.APP_NAME != "" && params.APP_NAME != null) {
+            if (params.APP_NAME && params.APP_NAME != "") {
                 APP_NAME = " -e app_name=" + params.APP_NAME
             }
 
