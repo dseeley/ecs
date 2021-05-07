@@ -23,6 +23,13 @@
     line: '\1 {{web_root}};'
     backrefs: yes
 
+- name: Enable file browsing for generated docs
+  become: yes
+  lineinfile:
+    path: /etc/nginx/sites-enabled/default
+    insertbefore: '^\s+location \/'
+    line: '	location /generated { autoindex on; }'
+
 - name: Start the Web Service
   become: yes
   service:

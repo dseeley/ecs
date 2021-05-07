@@ -5,3 +5,7 @@
 
 include::fields.asciidoc[]
 include::field-values.asciidoc[]
+
+== Auto-generated documentation
+
+View the link:./generated[plain text] auto-generated documentation

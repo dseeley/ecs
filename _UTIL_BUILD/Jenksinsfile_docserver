@@ -42,7 +42,7 @@ properties([
                 string(name: 'APP_NAME', description: "An optional custom app_name to override the default in the playbook"),
                 choice(name: 'CLOUD_REGION', choices: ['esxifree/dougalab', 'aws/eu-west-1', 'azure/westeurope', 'gcp/europe-west1'], description: "Choose a cloud/region"),
                 choice(name: 'BUILDENV', choices: ['tools', 'sandbox', 'dev', 'stage', 'prod'], description: "Choose an environment to deploy"),
-                string(name: 'CLUSTER_ID', defaultValue: '', description: "Select a cluster_id to deploy", trim: true),
+                string(name: 'CLUSTER_ID', defaultValue: '', description: "Select the cluster_id into which to deploy the docserver.  Leave blank to skip docserver deploy.", trim: true),
         ])
 ])
 
@@ -59,7 +59,7 @@ node {
     }
 
     create_custom_image("scs", "").inside("${docker_parent_net_str}") {
-        withCredentials([string(credentialsId: "VAULT_PASSWORD_${env.BUILDENV.toUpperCase()}", variable: 'VAULT_PASSWORD_BUILDENV')]) {
+        withCredentials([string(credentialsId: "VAULT_PASSWORD_${params.BUILDENV.toUpperCase()}", variable: 'VAULT_PASSWORD_BUILDENV')]) {
             env.VAULT_PASSWORD_BUILDENV = VAULT_PASSWORD_BUILDENV
         }
 
@@ -114,7 +114,7 @@ node {
 
             stage('Build docserver') {
                 dir('_UTIL_BUILD') {
-                    sh "ansible-playbook -e cloud_type=${CLOUD_TYPE} -e region=${REGION} -e buildenv=${params.BUILDENV} -e clusterid=${params.CLUSTER_ID} cluster.yml ${APP_NAME} -vvv"
+                    sh "ansible-playbook -e cloud_type=${CLOUD_TYPE} -e region=${REGION} -e buildenv=${params.BUILDENV} -e clusterid=${params.CLUSTER_ID} cluster.yml ${APP_NAME} -e clean=_all_ -vvv"
                 }
             }
         }
